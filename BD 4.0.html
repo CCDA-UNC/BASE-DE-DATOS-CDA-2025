@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BASE DE DATOS CDA</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f7f6; color: #333; position: relative; }
+        h1, h2 { color: #0056b3; }
+        #app-container { max-width: 1200px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        #filter-section, #results-section, #selection-view { margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #e0e0e0; }
+        input[type="text"], input[type="email"], input[type="tel"], select, button, input[type="file"], textarea { font-size: 16px; padding: 10px; margin: 5px 5px 5px 0; border-radius: 5px; border: 1px solid #ccc; }
+        button { background-color: #007bff; color: white; border: none; cursor: pointer; transition: background-color 0.2s; }
+        button:hover { background-color: #0056b3; }
+        #resetBtn, #clearSelectionBtn { background-color: #dc3545; }
+        #resetBtn:hover, #clearSelectionBtn:hover { background-color: #a71d2a; }
+        #downloadBtn, #downloadSelectionBtn { background-color: #28a745; } 
+        #downloadBtn:hover, #downloadSelectionBtn:hover { background-color: #1e7e34; }
+        #downloadExcelBtn, #downloadSelectionExcelBtn { background-color: #1a73e8; } 
+        #downloadExcelBtn:hover, #downloadSelectionExcelBtn:hover { background-color: #1152a1; }
+        #viewSelectionBtn { background-color: #ffc107; color: black; }
+        #viewSelectionBtn:hover { background-color: #e0a800; }
+        #activeFilters { margin-top: 15px; }
+        .filter-tag { display: inline-block; background-color: #e0e0e0; padding: 5px 10px; border-radius: 15px; margin: 5px; font-size: 14px; }
+        .filter-tag span { color: #c00; cursor: pointer; font-weight: bold; margin-left: 5px; }
+        #table-wrapper, #selection-table-wrapper { max-height: 600px; overflow: auto; border: 1px solid #ddd; }
+        
+        /* --- MODIFICADO: Estilos de Tabla --- */
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            table-layout: fixed; /* Clave para anchos iguales */
+        }
+        th, td { 
+            border: 1px solid #ddd; 
+            padding: 10px; 
+            text-align: left; 
+            font-size: 14px; 
+            white-space: normal; 
+            word-break: break-word; 
+            /* overflow: hidden; */ /* Opcional: si prefieres cortar texto largo */
+            /* text-overflow: ellipsis; */ /* Opcional: si prefieres cortar texto largo */
+        }
+        th { background-color: #f0f0f0; position: sticky; top: 0; z-index: 1; }
+        
+        /* Anchos fijos para columnas de acción */
+        th:nth-child(1), td:nth-child(1) { width: 40px; } /* Checkbox */
+        th:nth-child(2), td:nth-child(2) { width: 40px; text-align: center; } /* Lupa */ 
+        th:nth-child(3), td:nth-child(3) { width: 40px; text-align: center; } /* Video */
+        
+        /* Ancho distribuido para las 6 columnas de datos (el navegador calcula esto gracias a table-layout: fixed) */
+        /* No necesitamos definir width explícitamente para estas */
+        
+        /* --- FIN MODIFICACIÓN --- */
+
+        .detail-btn, .video-direct-link { background: none; border: none; font-size: 18px; cursor: pointer; padding: 5px; text-decoration: none; color: #007bff; display: inline-block; }
+        .video-direct-link:hover { color: #0056b3; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        #resultsCount, #selectionCount { font-size: 1.1em; font-weight: bold; margin-bottom: 10px; }
+        #login-view { max-width: 500px; margin: 50px auto; padding: 30px; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        #login-view h1 { color: #0056b3; margin-top: 0; text-align: center; }
+        #login-form { display: flex; flex-direction: column; gap: 15px; }
+        #login-form input, #login-form textarea { width: 95%; }
+        #login-form textarea { min-height: 80px; resize: vertical; }
+        #login-form button { background-color: #28a745; font-weight: bold; }
+        #login-form button:hover { background-color: #1e7e34; }
+        #detail-modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); z-index: 1000; justify-content: center; align-items: center; }
+        #detail-modal-content { background-color: #fff; padding: 30px; border-radius: 8px; max-width: 80%; max-height: 80%; overflow-y: auto; box-shadow: 0 5px 15px rgba(0,0,0,0.3); position: relative; }
+        #detail-modal-close { position: absolute; top: 10px; right: 15px; background: none; border: none; font-size: 24px; font-weight: bold; cursor: pointer; color: #aaa; }
+        #detail-modal-close:hover { color: #333; }
+        #detail-content div { margin-bottom: 10px; padding-bottom: 5px; border-bottom: 1px solid #eee; }
+        #detail-content div:last-child { border-bottom: none; }
+        #detail-content strong { color: #0056b3; display: block; margin-bottom: 3px; }
+        #detail-content .video-link a { font-weight: bold; color: #28a745; text-decoration: none; }
+        #detail-content .video-link a:hover { text-decoration: underline; }
+        .embedded-video-container { position: relative; overflow: hidden; width: 100%; padding-top: 56.25%; margin-top: 10px; }
+        .embedded-video-container iframe { position: absolute; top: 0; left: 0; bottom: 0; right: 0; width: 100%; height: 100%; border: none; }
+    </style>
+</head>
+<body>
+
+    <div id="login-view">
+        <h1>BASE DE DATOS CDA</h1>
+        <h2>Registro de Acceso</h2>
+        <p>Por favor, completa tus datos para ingresar a la base de datos.</p>
+        <form id="login-form">
+            <input type="text" id="login-nombre" placeholder="Nombre" required>
+            <input type="text" id="login-apellido" placeholder="Apellido" required>
+            <input type="text" id="login-institucion" placeholder="Institución" required>
+            <textarea id="login-proposito" placeholder="Propósito de uso..." required></textarea>
+            <input type="email" id="login-email" placeholder="Email de contacto" required>
+            <input type="tel" id="login-telefono" placeholder="Teléfono" required>
+            <button type="submit">Ingresar</button>
+        </form>
+    </div>
+
+    <div id="app-container" style="display: none;">
+        <h1>BASE DE DATOS CDA</h1>
+        <div id="main-view">
+            <div id="filter-section" style="display: none;">
+                <h2>2. Búsqueda y Filtros</h2> 
+                <div>
+                    <input type="text" id="globalSearch" placeholder="Búsqueda global en todos los campos..." style="width: 95%;">
+                </div>
+                <p><strong>O usa filtros por columna específicos:</strong></p> 
+                <div style="margin-top: 15px;">
+                    <select id="columnSelect"></select>
+                    <input type="text" id="columnFilterValue" list="column-suggestions" placeholder="Valor a buscar en la columna...">
+                    <button id="addFilterBtn">Agregar Filtro</button>
+                    <button id="resetBtn">Resetear Filtros</button>
+                    <datalist id="column-suggestions"></datalist>
+                </div>
+                <h3>Filtros Activos:</h3>
+                <div id="activeFilters"><p>Ninguno.</p></div>
+            </div>
+            <div id="results-section">
+                <h2>3. Resultados</h2>
+                <button id="viewSelectionBtn" style="display: none;">Mi Selección (0)</button>
+                <button id="clearSelectionBtn" style="display: none;">Limpiar Selección</button>
+                <button id="downloadBtn" style="display: none;">Descargar (CSV)</button>
+                <button id="downloadExcelBtn" style="display: none;">Descargar (Excel)</button> 
+                <div id="resultsCount">Cargando datos...</div>
+                <div id="table-wrapper">
+                    <table id="dataTable">
+                        <thead></thead>
+                        <tbody><tr><td>Por favor, espera a que carguen los datos...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div id="selection-view" style="display: none;">
+            <h2>Mi Selección</h2>
+            <button id="backToSearchBtn">Volver a la Búsqueda</button>
+            <button id="downloadSelectionBtn">Descargar Selección (CSV)</button>
+            <button id="downloadSelectionExcelBtn">Descargar Selección (Excel)</button> 
+            <div id="selectionCount" style="margin-top:15px;"></div>
+            <div id="selection-table-wrapper">
+                <table id="selectionTable">
+                    <thead></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="detail-modal-overlay">
+        <div id="detail-modal-content">
+            <button id="detail-modal-close">&times;</button>
+            <h2>Detalle del Registro</h2>
+            <div id="detail-content"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- Identificador Único ---
+        let idColumn = ''; 
+        let selectionEnabled = false; 
+        const videoLinkColumn = 'Link'; 
+
+        // --- Referencias a elementos del DOM ---
+        const filterSection = document.getElementById('filter-section');
+        const globalSearch = document.getElementById('globalSearch'); 
+        const columnSelect = document.getElementById('columnSelect');
+        const columnFilterValue = document.getElementById('columnFilterValue');
+        const addFilterBtn = document.getElementById('addFilterBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const activeFiltersDiv = document.getElementById('activeFilters');
+        const resultsCount = document.getElementById('resultsCount');
+        const tableHead = document.querySelector('#dataTable thead');
+        const tableBody = document.querySelector('#dataTable tbody');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const globalDatalist = document.createElement('datalist'); 
+        globalDatalist.id = 'global-suggestions'; document.body.appendChild(globalDatalist);
+        const columnDatalist = document.getElementById('column-suggestions');
+        const mainView = document.getElementById('main-view');
+        const selectionView = document.getElementById('selection-view');
+        const viewSelectionBtn = document.getElementById('viewSelectionBtn');
+        const clearSelectionBtn = document.getElementById('clearSelectionBtn');
+        const backToSearchBtn = document.getElementById('backToSearchBtn');
+        const downloadSelectionBtn = document.getElementById('downloadSelectionBtn');
+        const selectionCount = document.getElementById('selectionCount');
+        const selectionTableHead = document.querySelector('#selectionTable thead');
+        const selectionTableBody = document.querySelector('#selectionTable tbody');
+        const detailModalOverlay = document.getElementById('detail-modal-overlay');
+        const detailModalContent = document.getElementById('detail-modal-content');
+        const detailModalClose = document.getElementById('detail-modal-close');
+        const detailContent = document.getElementById('detail-content');
+        const downloadExcelBtn = document.getElementById('downloadExcelBtn');
+        const downloadSelectionExcelBtn = document.getElementById('downloadSelectionExcelBtn');
+
+        // --- Almacén de datos ---
+        let originalData = [];  
+        let headers = []; // Guardará TODOS los headers
+        let headersToShow = []; // Guardará los primeros 6 headers
+        let activeColumnFilters = {}; 
+        let allUniqueWords = new Set(); 
+        let columnUniqueValues = new Map(); 
+        let currentVisibleData = []; 
+        let selectedRowIDs = new Set(); 
+        
+        // --- Event Listeners ---
+        globalSearch.addEventListener('input', applyAllFilters); 
+        addFilterBtn.addEventListener('click', addColumnFilter);
+        resetBtn.addEventListener('click', resetAllFilters);
+        downloadBtn.addEventListener('click', downloadCSV);
+        columnSelect.addEventListener('change', updateColumnDatalist);
+        tableHead.addEventListener('click', handleSelectAllClick);
+        tableBody.addEventListener('click', handleRowActions); 
+        viewSelectionBtn.addEventListener('click', () => toggleViews(true));
+        backToSearchBtn.addEventListener('click', () => toggleViews(false));
+        clearSelectionBtn.addEventListener('click', clearAllSelections);
+        downloadSelectionBtn.addEventListener('click', downloadCSV);
+        detailModalClose.addEventListener('click', hideDetails);
+        detailModalOverlay.addEventListener('click', (event) => { if (event.target === detailModalOverlay) hideDetails(); });
+        selectionTableBody.addEventListener('click', handleRowActions); 
+        downloadExcelBtn.addEventListener('click', downloadExcel);
+        downloadSelectionExcelBtn.addEventListener('click', downloadExcel);
+
+        /**
+         * 1. Carga el CSV desde la URL de Google Sheet
+         */
+        function loadCsvFromUrl() {
+            const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTCrOqL9XW960K_GrYsSCcHwgrFxHcoIBQeW29Hwa3YWhigenU_rsRvZx0PWiGMrJ8LnAGPeyUtyXv_/pub?gid=1086377377&single=true&output=csv"; 
+            if (!csvUrl || csvUrl.startsWith("PEGA_AQUI")) { alert("Error config: URL Google Sheet no definida."); resultsCount.textContent = "Error: Falta URL."; return; }
+            resetAllFilters(); selectedRowIDs.clear(); updateSelectionCount(); originalData = []; currentVisibleData = []; idColumn = ''; selectionEnabled = false; 
+            filterSection.style.display = 'none'; downloadBtn.style.display = 'none'; downloadExcelBtn.style.display = 'none'; 
+            viewSelectionBtn.style.display = 'none'; clearSelectionBtn.style.display = 'none';
+            resultsCount.textContent = `Cargando base de datos...`; tableBody.innerHTML = '<tr><td>Cargando...</td></tr>';
+            console.log(`Cargando CSV desde: ${csvUrl}`); 
+            Papa.parse(csvUrl, {
+                download: true, header: true, skipEmptyLines: true, encoding: "UTF-8", 
+                complete: (results) => {
+                    console.log("Parse complete (UTF-8)."); 
+                    if (results.errors.length > 0) {
+                        console.warn("Fallo UTF-8, retry latin1. Errores:", results.errors);
+                        Papa.parse(csvUrl, { download: true, header: true, skipEmptyLines: true, encoding: "ISO-8859-1",
+                            complete: (latinResults) => {
+                                console.log("Parse complete (Latin1)."); 
+                                if (latinResults.errors.length > 0) { alert("Error lectura (UTF-8 y latin1)."); console.error("Errores PapaParse (Latin1):", latinResults.errors); resultsCount.textContent = 'Error carga.'; return; }
+                                console.log("Carga Latin1 OK."); processLoadedData(latinResults);
+                            },
+                            error: (latinErr) => { console.error("Error PapaParse (Latin1):", latinErr); alert(`Error carga/proceso CSV (Latin1).\nConsola F12.\n${latinErr.message || ''}`); resultsCount.textContent = 'Error carga.'; }
+                        }); return;
+                    }
+                    console.log("Carga UTF-8 OK."); processLoadedData(results); 
+                },
+                error: (err) => { 
+                    console.error("Error PapaParse (Download/UTF-8):", err);
+                    let errorMsg = `Error carga/proceso CSV.\nConsola F12.\n${err.message || ''}`;
+                    if (err.message && err.message.includes('CORS')) errorMsg += "\nProblema CORS. Usa servidor local.";
+                    alert(errorMsg); resultsCount.textContent = 'Error carga.';
+                }
+            });
+        }
+
+        /**
+         * 2. Procesa los datos cargados
+         * ¡MODIFICADO! Define headersToShow con las primeras 6 columnas
+         */
+        function processLoadedData(results) {
+            if (!results || !results.data || !results.meta || !results.meta.fields) { console.error("Resultados PapaParse inválidos:", results); alert("Error: Datos CSV corruptos/vacíos."); resultsCount.textContent = 'Error: Datos inválidos.'; return; }
+            console.log(`Datos crudos (${results.data.length} filas). Procesando...`);
+            originalData = results.data; let originalHeaders = results.meta.fields; 
+            // Guarda TODOS los headers limpios
+            headers = originalHeaders.map(h => h.trim()).filter(h => h); // Filtra vacíos
+            
+            // --- Lógica de ID ---
+            idColumn = ''; let foundIdColumn = headers.find(h => h.toLowerCase() === 'mfn') || headers.find(h => h.toLowerCase() === 'id');
+            if (foundIdColumn) { idColumn = foundIdColumn; selectionEnabled = true; console.log(`ID: '${idColumn}'. Carrito ON.`); } 
+            else { selectionEnabled = false; alert("Advertencia: No ID ('MFN' o 'id').\nCarrito OFF."); console.warn("No ID. Selección OFF."); }
+            // --- FIN ID ---
+
+            console.time("Limpiando datos");
+            originalData.forEach((row, index) => {
+                const newRow = {};
+                for (let i = 0; i < headers.length; i++) { // Usa TODOS los headers para limpiar
+                    const cleanHeader = headers[i]; 
+                    // Necesitamos mapear al header original para obtener el valor correcto
+                    const originalHeaderForKey = originalHeaders.find(oh => oh.trim() === cleanHeader); 
+                    if (cleanHeader && originalHeaderForKey) {
+                       if (row.hasOwnProperty(originalHeaderForKey)) {
+                           newRow[cleanHeader] = String(row[originalHeaderForKey] || "");
+                           if (cleanHeader === idColumn) newRow[cleanHeader] = newRow[cleanHeader].trim();
+                       } else {
+                           // Fallback si el header original no se encuentra (raro)
+                           console.warn(`Fila ${index}: Header original '${originalHeaderForKey}' no encontrado.`);
+                           newRow[cleanHeader] = ""; 
+                       }
+                    }
+                } originalData[index] = newRow; 
+            }); console.timeEnd("Limpiando datos");
+            
+            // --- INICIO MODIFICACIÓN: Definir headersToShow ---
+            // Toma las primeras 6 columnas de la lista COMPLETA de headers
+            headersToShow = headers.slice(0, 6); 
+            console.log("Mostrando las primeras 6 columnas:", headersToShow);
+            if (headers.length < 6) {
+                 console.warn(`Se pidieron 6 columnas, pero solo se encontraron ${headers.length}.`);
+            }
+            // --- FIN MODIFICACIÓN ---
+            
+            currentVisibleData = [...originalData]; renderTable(originalData); 
+            resultsCount.textContent = `Mostrando ${originalData.length} filas. Procesando predicciones...`;
+            setTimeout(() => {
+                try {
+                    console.time("Procesando datalists"); rebuildDatalists(originalData); console.timeEnd("Procesando datalists");
+                    populateColumnSelect(); updateColumnDatalist(); 
+                } catch (error) { console.error("Error procesando predicciones:", error); alert("Error procesando predicciones.\nFiltros sin sugerencias.\n" + error.message);
+                } finally {
+                    console.log("Mostrando filtros (finally)."); filterSection.style.display = 'block'; 
+                    downloadBtn.style.display = 'inline-block'; downloadExcelBtn.style.display = 'inline-block'; 
+                    if (selectionEnabled) { viewSelectionBtn.style.display = 'inline-block'; clearSelectionBtn.style.display = 'inline-block'; }
+                    resultsCount.textContent = `Mostrando ${originalData.length} de ${originalData.length} registros.`;
+                }
+            }, 50); 
+        }
+        
+        /**
+         * 3. Reconstruye los datalists
+         */
+        function rebuildDatalists(dataToProcess) {
+            console.time("Reconstruyendo datalists");
+            allUniqueWords = new Set(); 
+            columnUniqueValues = new Map(); headers.forEach(header => { if(header) columnUniqueValues.set(header, new Set()); });
+            for (const row of dataToProcess) {
+                for (const header of headers) { // Sigue iterando TODOS los headers para las predicciones
+                    if (!header) continue; 
+                    const cellValue = row.hasOwnProperty(header) && row[header] ? String(row[header]).trim() : ""; 
+                    if (cellValue) {
+                        if (columnUniqueValues.has(header)) columnUniqueValues.get(header).add(cellValue);
+                        const words = cellValue.toLowerCase().split(/[\s,.;:()]+/); 
+                        words.forEach(word => { if (word.length > 2) allUniqueWords.add(word); });
+                    }
+                }
+            } 
+            globalDatalist.innerHTML = ''; const globalFragment = document.createDocumentFragment();
+            const sortedGlobalWords = Array.from(allUniqueWords).sort((a, b) => a.localeCompare(b)); 
+            sortedGlobalWords.forEach(word => { const option = document.createElement('option'); option.value = word; globalFragment.appendChild(option); });
+            globalDatalist.appendChild(globalFragment);
+            console.timeEnd("Reconstruyendo datalists");
+        }
+
+        /**
+         * 4. Actualiza el datalist de columna (con ordenamiento)
+         */
+        function updateColumnDatalist() {
+            const selectedColumn = columnSelect.value; const valuesSet = columnUniqueValues.get(selectedColumn);
+            columnDatalist.innerHTML = ''; if (!valuesSet) return;
+            const sortedValues = Array.from(valuesSet).sort((a, b) => a.localeCompare(b));
+            const columnFragment = document.createDocumentFragment();
+            sortedValues.forEach(value => { const option = document.createElement('option'); option.value = value; columnFragment.appendChild(option); });
+            columnDatalist.appendChild(columnFragment);
+        }
+
+        /**
+         * 5. Rellena el <select> de filtros (Usa TODOS los headers)
+         */
+        function populateColumnSelect() {
+            columnSelect.innerHTML = ''; 
+            for (const header of headers) { // Importante: usar TODOS los headers para el filtro
+                if (header) { const option = document.createElement('option'); option.value = header; option.textContent = header; columnSelect.appendChild(option); }
+            }
+        }
+
+        /**
+         * 6. Dibuja la tabla con los datos (Usa headersToShow)
+         */
+        function renderTable(data) {
+            tableHead.innerHTML = ''; tableBody.innerHTML = ''; const headerRow = document.createElement('tr');
+            if (selectionEnabled) headerRow.innerHTML += `<th><input type="checkbox" id="selectAllCheckbox" title="Seleccionar todo"></th>`;
+            headerRow.innerHTML += `<th>Detalle</th>`; 
+            headerRow.innerHTML += `<th>Video</th>`;  
+            // Usa headersToShow para los encabezados visibles
+            for (const header of headersToShow) { const th = document.createElement('th'); th.textContent = header; headerRow.appendChild(th); } 
+            tableHead.appendChild(headerRow); 
+            const actionCols = (selectionEnabled ? 1 : 0) + 2; 
+            // Usa headersToShow para calcular colspan
+            const colspan = headersToShow.length + actionCols; 
+            if (data.length === 0) { tableBody.innerHTML = `<tr><td colspan="${colspan}">No se encontraron resultados.</td></tr>`; return; }
+            const fragment = document.createDocumentFragment();
+            data.forEach((row) => {
+                const tr = document.createElement('tr'); const rowID = row[idColumn]; 
+                if (selectionEnabled) {
+                    const tdCheck = document.createElement('td');
+                    if (rowID) { const isChecked = selectedRowIDs.has(rowID) ? "checked" : ""; tdCheck.innerHTML = `<input type="checkbox" class="row-checkbox" data-row-id="${rowID}" ${isChecked}>`; } 
+                    else console.warn("Fila sin ID:", row);
+                    tr.appendChild(tdCheck);
+                }
+                const tdDetail = document.createElement('td'); if (rowID) tdDetail.innerHTML = `<button class="detail-btn" data-row-id="${rowID}" title="Ver detalle">🔍</button>`; tr.appendChild(tdDetail);
+                const tdVideo = document.createElement('td');
+                const videoUrl = row.hasOwnProperty(videoLinkColumn) && row[videoLinkColumn] ? String(row[videoLinkColumn]).trim() : ''; 
+                if (videoUrl && (videoUrl.startsWith('http') || videoUrl.startsWith('/'))) { tdVideo.innerHTML = `<a href="${videoUrl}" target="_blank" rel="noopener noreferrer" class="video-direct-link" title="Abrir video">▶️</a>`; }
+                tr.appendChild(tdVideo);
+                // Usa headersToShow para mostrar las celdas
+                for (const header of headersToShow) { 
+                     const cellContent = row.hasOwnProperty(header) ? row[header] : ''; 
+                     const td = document.createElement('td'); td.textContent = cellContent; tr.appendChild(td); 
+                }
+                fragment.appendChild(tr);
+            });
+            tableBody.appendChild(fragment); updateSelectAllCheckboxState();
+        }
+
+
+        /**
+         * 7. Agrega un filtro de columna
+         */
+        function addColumnFilter() {
+            const column = columnSelect.value; const value = columnFilterValue.value.toLowerCase().trim();
+            if (!value) return; activeColumnFilters[column] = value; columnFilterValue.value = ''; 
+            renderActiveFilters(); applyAllFilters();
+        }
+
+        /**
+         * 8. Muestra los filtros activos
+         */
+        function renderActiveFilters() {
+            activeFiltersDiv.innerHTML = ''; const filters = Object.entries(activeColumnFilters);
+            if (filters.length === 0) { activeFiltersDiv.innerHTML = '<p>Ninguno.</p>'; return; }
+            for (const [column, value] of filters) {
+                const tag = document.createElement('div'); tag.className = 'filter-tag';
+                tag.innerHTML = `<strong>${column}</strong>: "${value}" <span data-column="${column}">&times;</span>`;
+                tag.querySelector('span').addEventListener('click', (e) => { const colToRemove = e.target.dataset.column; delete activeColumnFilters[colToRemove]; renderActiveFilters(); applyAllFilters(); });
+                activeFiltersDiv.appendChild(tag);
+            }
+        }
+
+        /**
+         * 9. Función principal que aplica TODOS los filtros
+         */
+        function applyAllFilters() {
+            let filteredData = [...originalData]; 
+            const globalTerm = globalSearch.value.toLowerCase().trim();
+            if (globalTerm) { filteredData = filteredData.filter(row => Object.values(row).some(value => String(value).toLowerCase().includes(globalTerm)) ); }
+            const columnFilters = Object.entries(activeColumnFilters);
+            if (columnFilters.length > 0) {
+                filteredData = filteredData.filter(row => columnFilters.every(([column, value]) => {
+                     const cellValue = row.hasOwnProperty(column) ? String(row[column] || "") : "";
+                     return cellValue.toLowerCase().includes(value);
+                    }) 
+                );
+            }
+            console.time("Reconstruyendo datalists dinámicos"); rebuildDatalists(filteredData); updateColumnDatalist(); console.timeEnd("Reconstruyendo datalists dinámicos");
+            renderTable(filteredData); currentVisibleData = filteredData; 
+            resultsCount.textContent = `Mostrando ${filteredData.length} de ${originalData.length} registros.`;
+        }
+
+        /**
+         * 10. Resetea todos los filtros
+         */
+        function resetAllFilters() {
+            globalSearch.value = ''; 
+            activeColumnFilters = {}; renderActiveFilters();
+            if (originalData.length > 0) {
+                console.time("Reconstruyendo datalists (reset)"); rebuildDatalists(originalData); updateColumnDatalist(); console.timeEnd("Reconstruyendo datalists (reset)");
+                renderTable(originalData); currentVisibleData = [...originalData]; 
+                resultsCount.textContent = `Mostrando ${originalData.length} de ${originalData.length} registros.`;
+            }
+        }
+
+        // --- INICIO: FUNCIONES CHECKBOX, VISTAS y MODAL ---
+        // (Sin cambios relevantes)
+
+        function handleRowActions(event) {
+            const target = event.target; if (target.classList.contains('video-direct-link')) return; 
+            if (selectionEnabled && target.classList.contains('row-checkbox')) handleRowCheckboxClick(target);
+            else if (target.classList.contains('detail-btn')) { const rowID = target.dataset.rowId; if (rowID) showDetails(rowID); }
+            else if (target.classList.contains('remove-item-btn')) { const idToRemove = target.dataset.rowId; selectedRowIDs.delete(idToRemove); updateSelectionCount(); renderSelectionTable(); }
+        }
+        function handleSelectAllClick(event) {
+            if (!selectionEnabled || event.target.id !== 'selectAllCheckbox') return; 
+            const isChecked = event.target.checked; const rowCheckboxes = tableBody.querySelectorAll('.row-checkbox');
+            currentVisibleData.forEach(row => { const rowID = row[idColumn]; if (rowID) { if (isChecked) selectedRowIDs.add(rowID); else selectedRowIDs.delete(rowID); } });
+            rowCheckboxes.forEach(checkbox => checkbox.checked = isChecked); updateSelectionCount();
+        }
+        function handleRowCheckboxClick(checkbox) { 
+             if (!selectionEnabled) return; const rowID = checkbox.dataset.rowId; if (!rowID) return;
+             if (checkbox.checked) selectedRowIDs.add(rowID); else selectedRowIDs.delete(rowID);
+             updateSelectAllCheckboxState(); updateSelectionCount();
+        }
+        function updateSelectAllCheckboxState() {
+            if (!selectionEnabled) return; const selectAllCheckbox = document.getElementById('selectAllCheckbox'); if (!selectAllCheckbox) return;
+            const totalVisibleRows = currentVisibleData.length; if (totalVisibleRows === 0) { selectAllCheckbox.checked = false; selectAllCheckbox.indeterminate = false; return; }
+            let visibleSelectedCount = 0; currentVisibleData.forEach(row => { if (row[idColumn] && selectedRowIDs.has(row[idColumn])) visibleSelectedCount++; });
+            if (visibleSelectedCount === totalVisibleRows && totalVisibleRows > 0) { selectAllCheckbox.checked = true; selectAllCheckbox.indeterminate = false; } 
+            else if (visibleSelectedCount > 0) { selectAllCheckbox.checked = false; selectAllCheckbox.indeterminate = true; } 
+            else { selectAllCheckbox.checked = false; selectAllCheckbox.indeterminate = false; }
+        }
+        function updateSelectionCount() { if (!selectionEnabled) return; const count = selectedRowIDs.size; viewSelectionBtn.textContent = `Mi Selección (${count})`; }
+        function clearAllSelections() {
+            if (!selectionEnabled || selectedRowIDs.size === 0) return;
+            if (confirm("¿Vaciar selección?")) {
+                selectedRowIDs.clear(); updateSelectionCount(); renderTable(currentVisibleData); 
+                if (selectionView.style.display === 'block') renderSelectionTable(); 
+            }
+        }
+        function toggleViews(showSelection) {
+            if (showSelection) { mainView.style.display = 'none'; selectionView.style.display = 'block'; renderSelectionTable(); } 
+            else { mainView.style.display = 'block'; selectionView.style.display = 'none'; renderTable(currentVisibleData); }
+        }
+        
+        /**
+         * 18: Dibuja tabla "Mi Selección" (Usa headersToShow)
+         */
+        function renderSelectionTable() {
+            selectionTableHead.innerHTML = ''; selectionTableBody.innerHTML = '';
+            const selectedData = originalData.filter(row => selectedRowIDs.has(row[idColumn]));
+            selectionCount.textContent = `Mostrando ${selectedData.length} items seleccionados.`;
+            const headerRow = document.createElement('tr'); headerRow.innerHTML = '<th>Quitar</th><th>Detalle</th><th>Video</th>'; 
+            // Usa headersToShow
+            for (const header of headersToShow) { const th = document.createElement('th'); th.textContent = header; headerRow.appendChild(th); } 
+            selectionTableHead.appendChild(headerRow); 
+            // Usa headersToShow para colspan
+            const colspan = headersToShow.length + 3; 
+            if (selectedData.length === 0) { selectionTableBody.innerHTML = `<tr><td colspan="${colspan}">No hay nada seleccionado.</td></tr>`; return; }
+            const fragment = document.createDocumentFragment();
+            for (const row of selectedData) {
+                const tr = document.createElement('tr'); const rowID = row[idColumn];
+                const tdRemove = document.createElement('td'); tdRemove.innerHTML = `<button class="remove-item-btn" data-row-id="${rowID}" style="background:red;padding:5px 10px;font-size:12px;">&times;</button>`; tr.appendChild(tdRemove);
+                const tdDetail = document.createElement('td'); if (rowID) tdDetail.innerHTML = `<button class="detail-btn" data-row-id="${rowID}" title="Ver detalle">🔍</button>`; tr.appendChild(tdDetail);
+                const tdVideo = document.createElement('td');
+                const videoUrl = row.hasOwnProperty(videoLinkColumn) && row[videoLinkColumn] ? String(row[videoLinkColumn]).trim() : ''; 
+                if (videoUrl && (videoUrl.startsWith('http') || videoUrl.startsWith('/'))) { tdVideo.innerHTML = `<a href="${videoUrl}" target="_blank" rel="noopener noreferrer" class="video-direct-link" title="Abrir video">▶️</a>`; }
+                tr.appendChild(tdVideo);
+                // Usa headersToShow para mostrar celdas
+                for (const header of headersToShow) { 
+                    const cellContent = row.hasOwnProperty(header) ? row[header] : '';
+                    const td = document.createElement('td'); td.textContent = cellContent; tr.appendChild(td); 
+                }
+                fragment.appendChild(tr);
+            } selectionTableBody.appendChild(fragment);
+        }
+        
+        /**
+         * 19: Muestra el modal de detalle (Usa TODOS los headers)
+         */
+        function showDetails(rowID) {
+            const record = originalData.find(row => row[idColumn] === rowID); if (!record) { console.error("Registro no encontrado ID:", rowID); return; }
+            detailContent.innerHTML = ''; const videoLinkColumn = 'Link'; 
+            // Usa TODOS los headers para el detalle
+            headers.forEach(header => { 
+                if (header) { 
+                     const value = record.hasOwnProperty(header) ? String(record[header] || '(vacío)') : '(campo no presente)'; 
+                     const detailItem = document.createElement('div');
+                     if (header === videoLinkColumn) {
+                         const trimmedValue = value.trim(); let videoEmbedHtml = '';
+                         let youtubeMatch = trimmedValue.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/);
+                         if (youtubeMatch && youtubeMatch[2].length === 11) { const youtubeId = youtubeMatch[2]; videoEmbedHtml = `<div class="embedded-video-container"><iframe src="https://www.youtube.com/embed/${youtubeId}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>`; } 
+                         else { let vimeoMatch = trimmedValue.match(/vimeo.*\/(\d+)/); if (vimeoMatch && vimeoMatch[1]) { const vimeoId = vimeoMatch[1]; videoEmbedHtml = `<div class="embedded-video-container"><iframe src="https://player.vimeo.com/video/${vimeoId}" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe></div>`; } }
+                         if (videoEmbedHtml) { detailItem.innerHTML = `<strong>${header}:</strong>${videoEmbedHtml}`; } 
+                         else if (trimmedValue && trimmedValue !== '(vacío)' && (trimmedValue.startsWith('http') || trimmedValue.startsWith('/'))) { detailItem.classList.add('video-link'); detailItem.innerHTML = `<strong>${header}:</strong> <a href="${trimmedValue}" target="_blank" rel="noopener noreferrer">Ver Recurso Externo ↗</a>`; } 
+                         else { detailItem.innerHTML = `<strong>${header}:</strong> (Video no disponible o formato no soportado)`; }
+                     } else { detailItem.innerHTML = `<strong>${header}:</strong> ${value}`; }
+                     detailContent.appendChild(detailItem);
+                }
+            }); detailModalOverlay.style.display = 'flex'; 
+        }
+
+        /**
+         * 20: Oculta el modal de detalle
+         */
+        function hideDetails() { detailModalOverlay.style.display = 'none'; detailContent.innerHTML = ''; }
+
+        // --- FIN FUNCIONES ---
+
+        /**
+         * 21. Descarga los datos CSV
+         */
+        function downloadCSV() {
+            let dataToDownload = []; let fileName = '';
+            if (selectionEnabled && selectedRowIDs.size > 0) { dataToDownload = originalData.filter(row => selectedRowIDs.has(row[idColumn])); fileName = `reporte_seleccion_${dataToDownload.length}_filas.csv`; } 
+            else { dataToDownload = [...currentVisibleData]; fileName = `reporte_filtrado_${dataToDownload.length}_filas.csv`; }
+            if (dataToDownload.length === 0) { alert("No hay datos para descargar."); return; }
+            const csvString = Papa.unparse(dataToDownload, { header: true });
+            const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8-sig;' }); 
+            const link = document.createElement('a'); const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url); link.setAttribute('download', fileName);
+            link.style.visibility = 'hidden'; document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        }
+        
+        /**
+         * 22: Descarga los datos Excel
+         */
+        function downloadExcel() {
+            let dataToDownload = []; let fileName = '';
+            if (selectionEnabled && selectedRowIDs.size > 0) { dataToDownload = originalData.filter(row => selectedRowIDs.has(row[idColumn])); fileName = `reporte_seleccion_${dataToDownload.length}_filas.xlsx`; } 
+            else { dataToDownload = [...currentVisibleData]; fileName = `reporte_filtrado_${dataToDownload.length}_filas.xlsx`; }
+            if (dataToDownload.length === 0) { alert("No hay datos para descargar."); return; }
+            try {
+                const worksheet = XLSX.utils.json_to_sheet(dataToDownload);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, "Datos");
+                XLSX.writeFile(workbook, fileName);
+            } catch (error) { console.error("Error al generar Excel:", error); alert("Error al generar archivo Excel."); }
+        }
+
+        // --- LÓGICA DE LOGIN ---
+        document.getElementById('login-form').addEventListener('submit', function(event) {
+            event.preventDefault(); submitToGoogleForm(); 
+            document.getElementById('login-view').style.display = 'none';
+            document.getElementById('app-container').style.display = 'block';
+            loadCsvFromUrl();
+        });
+
+        async function submitToGoogleForm() {
+            const googleFormURL = "https://docs.google.com/forms/d/e/1FAIpQLSeh4qQLBxaMePsqoKjRIq15lXkygZYA09KkL-2qQxJDogDsSQ/formResponse";
+            const fieldMappings = { 
+                "login-nombre": "entry.316389736", "login-apellido": "entry.1415082572", "login-institucion": "entry.1229867231", 
+                "login-proposito": "entry.341562279", "login-email": "entry.1362304377", "login-telefono": "entry.1084416613"     
+            };
+            // No necesita la alerta si los códigos están insertados
+            // if (fieldMappings['login-nombre'] === "entry.XXXXXX") { ... } 
+            const formData = new FormData();
+            for (const fieldId in fieldMappings) { formData.append(fieldMappings[fieldId], document.getElementById(fieldId).value); }
+            try { await fetch(googleFormURL, { method: "POST", body: formData, mode: "no-cors" }); console.log("Datos registro enviados a Google Form.");
+            } catch (error) { console.error("Error enviando datos registro:", error); }
+        }
+
+    </script>
+</body>
+</html>
