@@ -207,7 +207,7 @@
          * 1. Carga el CSV desde la URL de Google Sheet
          */
         function loadCsvFromUrl() {
-            const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTCrOqL9XW960K_GrYsSCcHwgrFxHcoIBQeW29Hwa3YWhigenU_rsRvZx0PWiGMrJ8LnAGPeyUtyXv_/pub?gid=1086377377&single=true&output=csv"; 
+            const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTDE0OmlP70g7-Xvgem2hIzeeAqbqxdMUE9n0pJ0G2DI9jB_IsLYChNNs21Xaio-EY29sbPbRHcxeK9/pub?gid=1068718906&single=true&output=csv"; 
             if (!csvUrl || csvUrl.startsWith("PEGA_AQUI")) { alert("Error config: URL Google Sheet no definida."); resultsCount.textContent = "Error: Falta URL."; return; }
             resetAllFilters(); selectedRowIDs.clear(); updateSelectionCount(); originalData = []; currentVisibleData = []; idColumn = ''; selectionEnabled = false; 
             filterSection.style.display = 'none'; downloadBtn.style.display = 'none'; downloadExcelBtn.style.display = 'none'; 
@@ -636,4 +636,5 @@
 
     </script>
 </body>
+
 </html>
