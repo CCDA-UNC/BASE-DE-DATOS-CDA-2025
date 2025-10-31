@@ -132,6 +132,7 @@
         </div>
     </div>
 
+
     <script>
         // --- Identificador Único ---
         let idColumn = ''; 
@@ -285,28 +286,40 @@
         
         /**
          * 3. Reconstruye los datalists (con exclusión)
+         * ¡MODIFICADO! Con chequeo de seguridad
          */
         function rebuildDatalists(dataToProcess) {
             console.time("Reconstruyendo datalists (con exclusión)");
             allUniqueWords = new Set(); columnUniqueValues = new Map(); 
             headers.forEach(header => { if(header && !excludeFromPredictions.has(header)) { columnUniqueValues.set(header, new Set()); } });
             console.log("Columnas SÍ usadas para predicciones:", Array.from(columnUniqueValues.keys()));
+            
             for (const row of dataToProcess) {
                 for (const header of columnUniqueValues.keys()) { 
                     const cellValue = row.hasOwnProperty(header) && row[header] ? String(row[header]).trim() : ""; 
-                    if (cellValue) {
+                    
+                    // --- INICIO MODIFICACIÓN: Chequeo de seguridad ---
+                    if (cellValue) { // Asegura que cellValue no sea ""
                         columnUniqueValues.get(header).add(cellValue); 
-                        const words = cellValue.toLowerCase().split(/[\s,.;:()]+/); 
-                        words.forEach(word => { if (word.length > 2) allUniqueWords.add(word); });
+                        
+                        const lowerCaseValue = cellValue.toLowerCase();
+                        // Comprueba que lowerCaseValue sea un string válido antes de .split()
+                        if (lowerCaseValue && typeof lowerCaseValue.split === 'function') { 
+                            const words = lowerCaseValue.split(/[\s,.;:()]+/); 
+                            words.forEach(word => { if (word.length > 2) allUniqueWords.add(word); });
+                        }
                     }
+                    // --- FIN MODIFICACIÓN ---
                 }
             } 
+            
             globalDatalist.innerHTML = ''; const globalFragment = document.createDocumentFragment();
             const sortedGlobalWords = Array.from(allUniqueWords).sort((a, b) => a.localeCompare(b)); 
             sortedGlobalWords.forEach(word => { const option = document.createElement('option'); option.value = word; globalFragment.appendChild(option); });
             globalDatalist.appendChild(globalFragment);
             console.timeEnd("Reconstruyendo datalists (con exclusión)");
         }
+
 
         /**
          * 4. Actualiza el datalist de columna (con ordenamiento)
@@ -560,29 +573,19 @@
         }
 
         // --- LÓGICA DE LOGIN ---
-        /**
-         * ¡MODIFICADO! Añade validación de email
-         */
         document.getElementById('login-form').addEventListener('submit', function(event) {
             event.preventDefault(); 
-
-            // --- INICIO DE MODIFICACIÓN ---
             const authorizedEmail = "archfilm@ffyh.unc.edu.ar";
             const inputEmail = document.getElementById('login-email').value.trim();
-
             if (inputEmail.toLowerCase() === authorizedEmail.toLowerCase()) {
-                // Email correcto: proceder
                 submitToGoogleForm(); 
                 document.getElementById('login-view').style.display = 'none';
                 document.getElementById('app-container').style.display = 'block';
                 loadCsvFromUrl();
             } else {
-                // Email incorrecto: mostrar error
                 alert("Acceso denegado. El email de contacto no está autorizado.");
             }
-            // --- FIN DE MODIFICACIÓN ---
         });
-
 
         async function submitToGoogleForm() {
             const googleFormURL = "https://docs.google.com/forms/d/e/1FAIpQLSeh4qQLBxaMePsqoKjRIq15lXkygZYA09KkL-2qQxJDogDsSQ/formResponse";
@@ -590,7 +593,6 @@
                 "login-nombre": "entry.316389736", "login-apellido": "entry.1415082572", "login-institucion": "entry.1229867231", 
                 "login-proposito": "entry.341562279", "login-email": "entry.1362304377", "login-telefono": "entry.1084416613"     
             };
-            // Ya no es necesaria la comprobación de 'entry.XXXXXX' porque están insertados
             const formData = new FormData();
             for (const fieldId in fieldMappings) { formData.append(fieldMappings[fieldId], document.getElementById(fieldId).value); }
             try { await fetch(googleFormURL, { method: "POST", body: formData, mode: "no-cors" }); console.log("Datos registro enviados a Google Form.");
