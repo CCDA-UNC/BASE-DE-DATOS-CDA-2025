@@ -132,7 +132,6 @@
         </div>
     </div>
 
-
     <script>
         // --- Identificador Único ---
         let idColumn = ''; 
@@ -286,7 +285,7 @@
         
         /**
          * 3. Reconstruye los datalists (con exclusión)
-         * ¡MODIFICADO! Con chequeo de seguridad
+         * ¡MODIFICADO! Con chequeo de seguridad robusto
          */
         function rebuildDatalists(dataToProcess) {
             console.time("Reconstruyendo datalists (con exclusión)");
@@ -296,18 +295,19 @@
             
             for (const row of dataToProcess) {
                 for (const header of columnUniqueValues.keys()) { 
-                    const cellValue = row.hasOwnProperty(header) && row[header] ? String(row[header]).trim() : ""; 
                     
-                    // --- INICIO MODIFICACIÓN: Chequeo de seguridad ---
-                    if (cellValue) { // Asegura que cellValue no sea ""
+                    // --- INICIO MODIFICACIÓN: Chequeo de seguridad robusto ---
+                    let cellValue = (row.hasOwnProperty(header) && row[header]) ? row[header] : "";
+                    
+                    // 1. Forzar a String y limpiar. Maneja null, undefined, numeros, etc.
+                    cellValue = String(cellValue).trim(); 
+                    
+                    if (cellValue) { // Solo procesar si no es un string vacío
                         columnUniqueValues.get(header).add(cellValue); 
                         
-                        const lowerCaseValue = cellValue.toLowerCase();
-                        // Comprueba que lowerCaseValue sea un string válido antes de .split()
-                        if (lowerCaseValue && typeof lowerCaseValue.split === 'function') { 
-                            const words = lowerCaseValue.split(/[\s,.;:()]+/); 
-                            words.forEach(word => { if (word.length > 2) allUniqueWords.add(word); });
-                        }
+                        // 2. .toLowerCase() y .split() ahora son seguros porque cellValue es un string
+                        const words = cellValue.toLowerCase().split(/[\s,.;:()]+/); 
+                        words.forEach(word => { if (word.length > 2) allUniqueWords.add(word); });
                     }
                     // --- FIN MODIFICACIÓN ---
                 }
@@ -601,5 +601,4 @@
 
     </script>
 </body>
-
 </html>
